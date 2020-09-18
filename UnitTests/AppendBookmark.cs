@@ -1,16 +1,13 @@
-﻿using NUnit.Framework;
+﻿using System.Linq;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Novacode;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace UnitTests
 {
-    [TestFixture]
+    [TestClass]
     public class AppendBookmark
     {
-        [Test]
+        [TestMethod]
         public void Bookmark_should_be_appended()
         {
             using (var doc = DocX.Create(""))
@@ -22,7 +19,7 @@ namespace UnitTests
             }
         }
 
-        [Test]
+        [TestMethod]
         public void Bookmark_should_be_named_correctly()
         {
             using (var doc = DocX.Create(""))
@@ -34,7 +31,7 @@ namespace UnitTests
             }
         }
 
-        [Test]
+        [TestMethod]
         public void Bookmark_should_reference_paragraph()
         {
             using (var doc = DocX.Create(""))
@@ -45,6 +42,5 @@ namespace UnitTests
                 Assert.AreEqual(paragraph, bookmarks.First().Paragraph);
             }
         }
-
     }
 }

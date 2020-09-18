@@ -18,72 +18,76 @@ namespace Novacode
         private Alignment alignment;
         private AutoFit autofit;
         private float[] ColumnWidthsValue;
+        private int _cachedColCount = -1;
+
+        private TableDesign design;
+
         /// <summary>
-        /// Merge cells in given column starting with startRow and ending with endRow.
+        /// Extra property for Custom Table Style provided by carpfisher - Thanks
         /// </summary>
-        /// <remarks>
-        /// Added by arudoy patch: 11608
-        /// </remarks>
-        public void MergeCellsInColumn(int columnIndex, int startRow, int endRow)
+        private string _customTableDesignName;
+
+        /// <summary>
+        /// String containing the Table Caption value (the table's Alternate Text Title)
+        /// </summary>
+        private string _tableCaption;
+
+        /// <summary>
+        /// String containing the Table Description (the table's Alternate Text Description).
+        /// </summary>
+        private string _tableDescription;
+
+        internal Table(DocX document, XElement xml)
+                    : base(document, xml)
         {
-            // Check for valid start and end indexes.
-            if (columnIndex < 0 || columnIndex >= ColumnCount)
-                throw new IndexOutOfRangeException();
+            autofit = AutoFit.ColumnWidth;
+            this.Xml = xml;
+            this.mainPart = document.mainPart;
 
-            if (startRow < 0 || endRow <= startRow || endRow >= Rows.Count)
-                throw new IndexOutOfRangeException();
-            // Foreach each Cell between startIndex and endIndex inclusive.
-            foreach (Row row in Rows.Where((z, i) => i > startRow && i <= endRow))
+            XElement properties = xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
+
+            XElement style = properties?.Element(XName.Get("tblStyle", DocX.w.NamespaceName));
+            if (style != null)
             {
-                Cell c = row.Cells[columnIndex];
-                XElement tcPr = c.Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                if (tcPr == null)
-                {
-                    c.Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
-                    tcPr = c.Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                }
+                XAttribute val = style.Attribute(XName.Get("val", DocX.w.NamespaceName));
 
-                XElement vMerge = tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
-                if (vMerge == null)
+                if (val != null)
                 {
-                    tcPr.SetElementValue(XName.Get("vMerge", DocX.w.NamespaceName), string.Empty);
-                    vMerge = tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+                    String cleanValue = val.Value.Replace("-", string.Empty);
+                    if (Enum.IsDefined(typeof(TableDesign), cleanValue))
+                    {
+                        design = (TableDesign)Enum.Parse(typeof(TableDesign), cleanValue);
+                    }
+                    else
+                    {
+                        design = TableDesign.Custom;
+                    }
                 }
+                else
+                    design = TableDesign.None;
             }
-
-            /* 
-             * Get the tcPr (table cell properties) element for the first cell in this merge,
-            * null will be returned if no such element exists.
-             */
-            XElement start_tcPr;
-            if (columnIndex > Rows[startRow].Cells.Count)
-                start_tcPr = Rows[startRow].Cells[Rows[startRow].Cells.Count - 1].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
             else
-                start_tcPr = Rows[startRow].Cells[columnIndex].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-            if (start_tcPr == null)
-            {
-                Rows[startRow].Cells[columnIndex].Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
-                start_tcPr = Rows[startRow].Cells[columnIndex].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-            }
+                design = TableDesign.None;
 
-            /* 
-              * Get the gridSpan element of this row,
-              * null will be returned if no such element exists.
-              */
-            XElement start_vMerge = start_tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
-            if (start_vMerge == null)
+            XElement tableLook = properties?.Element(XName.Get("tblLook", DocX.w.NamespaceName));
+            if (tableLook != null)
             {
-                start_tcPr.SetElementValue(XName.Get("vMerge", DocX.w.NamespaceName), string.Empty);
-                start_vMerge = start_tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+                TableLook = new TableLook
+                {
+                    FirstRow = tableLook.GetAttribute(XName.Get("firstRow", DocX.w.NamespaceName)) == "1",
+                    LastRow = tableLook.GetAttribute(XName.Get("lastRow", DocX.w.NamespaceName)) == "1",
+                    FirstColumn = tableLook.GetAttribute(XName.Get("firstColumn", DocX.w.NamespaceName)) == "1",
+                    LastColumn = tableLook.GetAttribute(XName.Get("lastColumn", DocX.w.NamespaceName)) == "1",
+                    NoHorizontalBanding = tableLook.GetAttribute(XName.Get("noHBand", DocX.w.NamespaceName)) == "1",
+                    NoVerticalBanding = tableLook.GetAttribute(XName.Get("noVBand", DocX.w.NamespaceName)) == "1"
+                };
             }
-
-            start_vMerge.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), "restart");
         }
 
         /// <summary>
         /// Returns a list of all Paragraphs inside this container.
         /// </summary>
-        /// 
+        ///
         public virtual List<Paragraph> Paragraphs
         {
             get
@@ -133,36 +137,6 @@ namespace Novacode
         }
 
         /// <summary>
-        /// Set the direction of all content in this Table.
-        /// </summary>
-        /// <param name="direction">(Left to Right) or (Right to Left)</param>
-        /// <example>
-        /// Set the content direction for all content in a table to RightToLeft.
-        /// <code>
-        /// // Load a document.
-        /// using (DocX document = DocX.Load(@"Test.docx"))
-        /// {
-        ///     // Get the first table in a document.
-        ///     Table table = document.Tables[0];
-        ///
-        ///     // Set the content direction for all content in this table to RightToLeft.
-        ///     table.SetDirection(Direction.RightToLeft);
-        ///    
-        ///     // Save all changes made to this document.
-        ///     document.Save();
-        /// }
-        /// </code>
-        /// </example>
-        public void SetDirection(Direction direction)
-        {
-            XElement tblPr = GetOrCreate_tblPr();
-            tblPr.Add(new XElement(DocX.w + "bidiVisual"));
-
-            foreach (Row r in Rows)
-                r.SetDirection(direction);
-        }
-
-        /// <summary>
         /// Get all of the Hyperlinks in this Table.
         /// </summary>
         /// <example>
@@ -195,160 +169,6 @@ namespace Novacode
             }
         }
 
-        public void SetWidths(float[] widths)
-        {
-            this.ColumnWidthsValue = widths;
-            //set widths for existing rows
-            foreach (var r in Rows)
-            {
-                for (var c = 0; c < widths.Length; c++)
-                {
-                    if (r.Cells.Count > c)
-                        r.Cells[c].Width = widths[c];
-                }
-
-            }
-        }
-
-        /// <summary> 
-        /// Set Table column width by prescribing percent 
-        /// </summary> 
-        /// <param name="widthsPercentage">column width % list</param> 
-        /// <param name="totalWidth">Total table width. Will be calculated if null sent.</param>
-        public void SetWidthsPercentage(float[] widthsPercentage, float? totalWidth)
-        {
-            if (totalWidth == null) totalWidth = this.Document.PageWidth - this.Document.MarginLeft - this.Document.MarginRight; // calculate total table width 
-            List<float> widths = new List<float>(widthsPercentage.Length); // empty list, will hold actual width 
-            widthsPercentage.ToList().ForEach(pWidth => { widths.Add((pWidth * totalWidth.Value / 100) * (96 / 72)); }); // convert percentage to actual width for all values in array 
-            SetWidths(widths.ToArray()); // set actual column width
-        }
-
-
-        /// <summary>
-        /// If the tblPr element doesent exist it is created, either way it is returned by this function.
-        /// </summary>
-        /// <returns>The tblPr element for this Table.</returns>
-        internal XElement GetOrCreate_tblPr()
-        {
-            // Get the element.
-            XElement tblPr = Xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
-
-            // If it dosen't exist, create it.
-            if (tblPr == null)
-            {
-                Xml.AddFirst(new XElement(XName.Get("tblPr", DocX.w.NamespaceName)));
-                tblPr = Xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
-            }
-
-            // Return the pPr element for this Paragraph.
-            return tblPr;
-        }
-
-#pragma warning disable CS1584 // XML comment has syntactically incorrect cref attribute
-        /// <summary>
-        /// Set the specified cell margin for the table-level.
-        /// </summary>
-        /// <param name="type">The side of the cell margin.</param>
-        /// <param name="margin">The value for the specified cell margin.</param>
-        /// <remarks>More information can be found <see cref="http://msdn.microsoft.com/en-us/library/documentformat.openxml.wordprocessing.tablecellmargindefault.aspx">here</see></remarks>
-        public void SetTableCellMargin(TableCellMarginType type, double margin)
-#pragma warning restore CS1584 // XML comment has syntactically incorrect cref attribute
-        {
-            XElement tblPr = GetOrCreate_tblPr();
-
-            // find (or create) the element with the cell margins 
-            XElement tblCellMar = tblPr.Element(XName.Get("tblCellMar", DocX.w.NamespaceName));
-            if (tblCellMar == null)
-            {
-                tblPr.AddFirst(new XElement(XName.Get("tblCellMar", DocX.w.NamespaceName)));
-                tblCellMar = tblPr.Element(XName.Get("tblCellMar", DocX.w.NamespaceName));
-            }
-
-            // find (or create) the element with cell margin for the specified side
-            XElement tblMargin = tblCellMar.Element(XName.Get(type.ToString(), DocX.w.NamespaceName));
-            if (tblMargin == null)
-            {
-                tblCellMar.AddFirst(new XElement(XName.Get(type.ToString(), DocX.w.NamespaceName)));
-                tblMargin = tblCellMar.Element(XName.Get(type.ToString(), DocX.w.NamespaceName));
-            }
-
-            tblMargin.RemoveAttributes();
-            // set the value for the cell margin
-            tblMargin.Add(new XAttribute(XName.Get("w", DocX.w.NamespaceName), margin));
-            // set the side of cell margin
-            tblMargin.Add(new XAttribute(XName.Get("type", DocX.w.NamespaceName), "dxa"));
-        }
-
-        /// <summary>
-        /// Gets the column width for a given column index.
-        /// </summary>
-        /// <param name="index"></param>
-        public Double GetColumnWidth(Int32 index)
-        {
-            List<Double> widths = ColumnWidths;
-            if (widths == null || index > widths.Count - 1) return Double.NaN;
-
-            return widths[index];
-        }
-
-        /// <summary>
-        /// Sets the column width for the given index.
-        /// </summary>
-        /// <param name="index">Column index</param>
-        /// <param name="width">Colum width</param>
-        public void SetColumnWidth(Int32 index, Double width)
-        {
-            List<Double> widths = ColumnWidths;
-            if (widths == null || index > widths.Count - 1)
-            {
-                if (Rows.Count == 0) throw new Exception("There is at least one row required to detect the existing columns.");
-                // use width of last row cells
-                // may not work for merged cell! 
-                widths = new List<Double>();
-                foreach (Cell c in Rows[Rows.Count - 1].Cells)
-                {
-                    widths.Add(c.Width);
-                }
-            }
-
-            // check if index is matching table columns
-            if (index > widths.Count - 1) throw new Exception("The index is greather than the available table columns.");
-
-            // get the table grid props
-            XElement grid = Xml.Element(XName.Get("tblGrid", DocX.w.NamespaceName));
-            // if null; append a new grid below tblPr
-            if (grid == null)
-            {
-                XElement tblPr = GetOrCreate_tblPr();
-                tblPr.AddAfterSelf(new XElement(XName.Get("tblGrid", DocX.w.NamespaceName)));
-                grid = Xml.Element(XName.Get("tblGrid", DocX.w.NamespaceName));
-            }
-
-            // remove all existing values
-            grid?.RemoveAll();
-
-            // append new column widths
-            Int32 i = 0;
-            foreach (var w in widths)
-            {
-                double value = w;
-                if (i == index) value = width;
-                var gridCol = new XElement(XName.Get("gridCol", DocX.w.NamespaceName),
-                    new XAttribute(XName.Get("w", DocX.w.NamespaceName), value));
-                grid?.Add(gridCol);
-                i += 1;
-            }
-
-            // remove cell widths
-            foreach (Row r in Rows)
-                foreach (Cell c in r.Cells)
-                    c.Width = -1;
-
-            // set fitting to fixed; this will add/set additional table properties
-            this.AutoFit = AutoFit.Fixed;
-        }
-
-
         /// <summary>
         /// Gets a list of all column widths for this table.
         /// </summary>
@@ -373,7 +193,6 @@ namespace Novacode
             }
         }
 
-
         /// <summary>
         /// Returns the number of rows in this table.
         /// </summary>
@@ -385,7 +204,6 @@ namespace Novacode
             }
         }
 
-        private int _cachedColCount = -1;
         /// <summary>
         /// Returns the number of columns in this table.
         /// </summary>
@@ -418,61 +236,6 @@ namespace Novacode
             }
         }
 
-        private TableDesign design;
-
-
-        internal Table(DocX document, XElement xml)
-            : base(document, xml)
-        {
-            autofit = AutoFit.ColumnWidth;
-            this.Xml = xml;
-            this.mainPart = document.mainPart;
-
-            XElement properties = xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
-
-            XElement style = properties?.Element(XName.Get("tblStyle", DocX.w.NamespaceName));
-            if (style != null)
-            {
-                XAttribute val = style.Attribute(XName.Get("val", DocX.w.NamespaceName));
-
-                if (val != null)
-                {
-                    String cleanValue = val.Value.Replace("-", string.Empty);
-                    if (Enum.IsDefined(typeof(TableDesign), cleanValue))
-                    {
-                        design = (TableDesign)Enum.Parse(typeof(TableDesign), cleanValue);
-                    }
-                    else
-                    {
-                        design = TableDesign.Custom;
-                    }
-                }
-                else
-                    design = TableDesign.None;
-            }
-
-            else
-                design = TableDesign.None;
-
-            XElement tableLook = properties?.Element(XName.Get("tblLook", DocX.w.NamespaceName));
-            if (tableLook != null)
-            {
-                TableLook = new TableLook
-                {
-                    FirstRow = tableLook.GetAttribute(XName.Get("firstRow", DocX.w.NamespaceName)) == "1",
-                    LastRow = tableLook.GetAttribute(XName.Get("lastRow", DocX.w.NamespaceName)) == "1",
-                    FirstColumn = tableLook.GetAttribute(XName.Get("firstColumn", DocX.w.NamespaceName)) == "1",
-                    LastColumn = tableLook.GetAttribute(XName.Get("lastColumn", DocX.w.NamespaceName)) == "1",
-                    NoHorizontalBanding = tableLook.GetAttribute(XName.Get("noHBand", DocX.w.NamespaceName)) == "1",
-                    NoVerticalBanding = tableLook.GetAttribute(XName.Get("noVBand", DocX.w.NamespaceName)) == "1"
-                };
-            }
-
-        }
-        /// <summary>
-        /// Extra property for Custom Table Style provided by carpfisher - Thanks
-        /// </summary>
-        private string _customTableDesignName;
         /// <summary>
         /// Extra property for Custom Table Style provided by carpfisher - Thanks
         /// </summary>
@@ -491,11 +254,7 @@ namespace Novacode
         }
 
         /// <summary>
-        /// String containing the Table Caption value (the table's Alternate Text Title)
-        /// </summary>
-        private string _tableCaption;
-        /// <summary>
-        /// Gets or Sets the value of the Table Caption (Alternate Text Title) of this table. 
+        /// Gets or Sets the value of the Table Caption (Alternate Text Title) of this table.
         /// </summary>
         public string TableCaption
         {
@@ -529,11 +288,7 @@ namespace Novacode
         }
 
         /// <summary>
-        /// String containing the Table Description (the table's Alternate Text Description).
-        /// </summary>
-        private string _tableDescription;
-        /// <summary>
-        /// Gets or Sets the value of the Table Description (Alternate Text Description) of this table. 
+        /// Gets or Sets the value of the Table Description (Alternate Text Description) of this table.
         /// </summary>
         public string TableDescription
         {
@@ -565,12 +320,14 @@ namespace Novacode
             }
         }
 
-
         public TableLook TableLook { get; set; }
 
         public Alignment Alignment
         {
-            get { return alignment; }
+            get
+            {
+                return alignment;
+            }
             set
             {
                 string alignmentString = string.Empty;
@@ -587,7 +344,6 @@ namespace Novacode
                             alignmentString = "both";
                             break;
                         }
-
 
                     case Alignment.right:
                         {
@@ -619,7 +375,10 @@ namespace Novacode
         /// <remarks>Added by Roger Saele, April 2012. Thank you for your contribution Roger.</remarks>
         public AutoFit AutoFit
         {
-            get { return autofit; }
+            get
+            {
+                return autofit;
+            }
 
             set
             {
@@ -693,9 +452,7 @@ namespace Novacode
 
                                 tmp.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), i.ToString());
 
-
                                 break;
-
                             }
                             else
                             {
@@ -707,7 +464,6 @@ namespace Novacode
                                 foreach (XAttribute type in qry)
                                     type.Value = "fixed";
 
-
                                 XElement tmp = tblPr.Element(XName.Get("tblW", DocX.w.NamespaceName));
                                 Double i = 0;
                                 foreach (Double w in ColumnWidths)
@@ -716,7 +472,6 @@ namespace Novacode
                                 tmp.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), i.ToString());
                                 break;
                             }
-
                         }
                 }
 
@@ -741,26 +496,30 @@ namespace Novacode
                 autofit = value;
             }
         }
+
         /// <summary>
         /// The design\style to apply to this table.
-        /// 
+        ///
         /// Patch1. Patch to code for Custom Table Style support by carpfisher
         /// </summary>
         /// <example>
-        /// Example code for custom table style usage 
-        /// 
-        /// <code> 
+        /// Example code for custom table style usage
+        ///
+        /// <code>
         /// Novacode.DocX document = Novacode.DocX.Load(“DOC01.doc”); // load document with custom table style defined
-        /// Novacode.Table t = document.AddTable(2, 2); // adds table 
+        /// Novacode.Table t = document.AddTable(2, 2); // adds table
         /// t.CustomTableDesignName = “MyStyle01”; // assigns Custom Table Design style to newly created table
         /// </code>
         /// </example>
-        /// 
-        /// 
-        /// 
+        ///
+        ///
+        ///
         public TableDesign Design
         {
-            get { return design; }
+            get
+            {
+                return design;
+            }
             set
             {
                 XElement tblPr = Xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
@@ -785,245 +544,318 @@ namespace Novacode
 
                 if (design == TableDesign.Custom)
                 {
-					#region Code is commented out
-					// The code gives a problem while copiing a table.
-					// Look at Test_Clone_Table_Twice method in test.
-					//Example:
-					//Table tab1 = doc.Tables[ 0 ];
-					//Table tab2 = doc.InsertTable( tab1 );
-					//Table tab3 = doc.InsertTable( tab2 ); - here we have exception at "var styleElement =" line below in this method
-					// The source of the problem is loosing the "<w:tblStyle w:val="a3"/>" by the commented code
+                    #region Code is commented out
 
-					//if (string.IsNullOrEmpty(_customTableDesignName))
-					//{
-					//    design = TableDesign.None;
-					//    if (style != null)
-					//        style.Remove();
+                    // The code gives a problem while copiing a table.
+                    // Look at Test_Clone_Table_Twice method in test.
+                    //Example:
+                    //Table tab1 = doc.Tables[ 0 ];
+                    //Table tab2 = doc.InsertTable( tab1 );
+                    //Table tab3 = doc.InsertTable( tab2 ); - here we have exception at "var styleElement =" line below in this method
+                    // The source of the problem is loosing the "<w:tblStyle w:val="a3"/>" by the commented code
 
-					//}
-					//else
-					//{
-					//    val.Value = _customTableDesignName;
-					//}
-					#endregion
-				}
-				else
+                    //if (string.IsNullOrEmpty(_customTableDesignName))
+                    //{
+                    //    design = TableDesign.None;
+                    //    if (style != null)
+                    //        style.Remove();
+
+                    //}
+                    //else
+                    //{
+                    //    val.Value = _customTableDesignName;
+                    //}
+
+                    #endregion Code is commented out
+                }
+                else
                 {
                     switch (design)
                     {
                         case TableDesign.TableNormal:
                             val.Value = "TableNormal";
                             break;
+
                         case TableDesign.TableGrid:
                             val.Value = "TableGrid";
                             break;
+
                         case TableDesign.LightShading:
                             val.Value = "LightShading";
                             break;
+
                         case TableDesign.LightShadingAccent1:
                             val.Value = "LightShading-Accent1";
                             break;
+
                         case TableDesign.LightShadingAccent2:
                             val.Value = "LightShading-Accent2";
                             break;
+
                         case TableDesign.LightShadingAccent3:
                             val.Value = "LightShading-Accent3";
                             break;
+
                         case TableDesign.LightShadingAccent4:
                             val.Value = "LightShading-Accent4";
                             break;
+
                         case TableDesign.LightShadingAccent5:
                             val.Value = "LightShading-Accent5";
                             break;
+
                         case TableDesign.LightShadingAccent6:
                             val.Value = "LightShading-Accent6";
                             break;
+
                         case TableDesign.LightList:
                             val.Value = "LightList";
                             break;
+
                         case TableDesign.LightListAccent1:
                             val.Value = "LightList-Accent1";
                             break;
+
                         case TableDesign.LightListAccent2:
                             val.Value = "LightList-Accent2";
                             break;
+
                         case TableDesign.LightListAccent3:
                             val.Value = "LightList-Accent3";
                             break;
+
                         case TableDesign.LightListAccent4:
                             val.Value = "LightList-Accent4";
                             break;
+
                         case TableDesign.LightListAccent5:
                             val.Value = "LightList-Accent5";
                             break;
+
                         case TableDesign.LightListAccent6:
                             val.Value = "LightList-Accent6";
                             break;
+
                         case TableDesign.LightGrid:
                             val.Value = "LightGrid";
                             break;
+
                         case TableDesign.LightGridAccent1:
                             val.Value = "LightGrid-Accent1";
                             break;
+
                         case TableDesign.LightGridAccent2:
                             val.Value = "LightGrid-Accent2";
                             break;
+
                         case TableDesign.LightGridAccent3:
                             val.Value = "LightGrid-Accent3";
                             break;
+
                         case TableDesign.LightGridAccent4:
                             val.Value = "LightGrid-Accent4";
                             break;
+
                         case TableDesign.LightGridAccent5:
                             val.Value = "LightGrid-Accent5";
                             break;
+
                         case TableDesign.LightGridAccent6:
                             val.Value = "LightGrid-Accent6";
                             break;
+
                         case TableDesign.MediumShading1:
                             val.Value = "MediumShading1";
                             break;
+
                         case TableDesign.MediumShading1Accent1:
                             val.Value = "MediumShading1-Accent1";
                             break;
+
                         case TableDesign.MediumShading1Accent2:
                             val.Value = "MediumShading1-Accent2";
                             break;
+
                         case TableDesign.MediumShading1Accent3:
                             val.Value = "MediumShading1-Accent3";
                             break;
+
                         case TableDesign.MediumShading1Accent4:
                             val.Value = "MediumShading1-Accent4";
                             break;
+
                         case TableDesign.MediumShading1Accent5:
                             val.Value = "MediumShading1-Accent5";
                             break;
+
                         case TableDesign.MediumShading1Accent6:
                             val.Value = "MediumShading1-Accent6";
                             break;
+
                         case TableDesign.MediumShading2:
                             val.Value = "MediumShading2";
                             break;
+
                         case TableDesign.MediumShading2Accent1:
                             val.Value = "MediumShading2-Accent1";
                             break;
+
                         case TableDesign.MediumShading2Accent2:
                             val.Value = "MediumShading2-Accent2";
                             break;
+
                         case TableDesign.MediumShading2Accent3:
                             val.Value = "MediumShading2-Accent3";
                             break;
+
                         case TableDesign.MediumShading2Accent4:
                             val.Value = "MediumShading2-Accent4";
                             break;
+
                         case TableDesign.MediumShading2Accent5:
                             val.Value = "MediumShading2-Accent5";
                             break;
+
                         case TableDesign.MediumShading2Accent6:
                             val.Value = "MediumShading2-Accent6";
                             break;
+
                         case TableDesign.MediumList1:
                             val.Value = "MediumList1";
                             break;
+
                         case TableDesign.MediumList1Accent1:
                             val.Value = "MediumList1-Accent1";
                             break;
+
                         case TableDesign.MediumList1Accent2:
                             val.Value = "MediumList1-Accent2";
                             break;
+
                         case TableDesign.MediumList1Accent3:
                             val.Value = "MediumList1-Accent3";
                             break;
+
                         case TableDesign.MediumList1Accent4:
                             val.Value = "MediumList1-Accent4";
                             break;
+
                         case TableDesign.MediumList1Accent5:
                             val.Value = "MediumList1-Accent5";
                             break;
+
                         case TableDesign.MediumList1Accent6:
                             val.Value = "MediumList1-Accent6";
                             break;
+
                         case TableDesign.MediumList2:
                             val.Value = "MediumList2";
                             break;
+
                         case TableDesign.MediumList2Accent1:
                             val.Value = "MediumList2-Accent1";
                             break;
+
                         case TableDesign.MediumList2Accent2:
                             val.Value = "MediumList2-Accent2";
                             break;
+
                         case TableDesign.MediumList2Accent3:
                             val.Value = "MediumList2-Accent3";
                             break;
+
                         case TableDesign.MediumList2Accent4:
                             val.Value = "MediumList2-Accent4";
                             break;
+
                         case TableDesign.MediumList2Accent5:
                             val.Value = "MediumList2-Accent5";
                             break;
+
                         case TableDesign.MediumList2Accent6:
                             val.Value = "MediumList2-Accent6";
                             break;
+
                         case TableDesign.MediumGrid1:
                             val.Value = "MediumGrid1";
                             break;
+
                         case TableDesign.MediumGrid1Accent1:
                             val.Value = "MediumGrid1-Accent1";
                             break;
+
                         case TableDesign.MediumGrid1Accent2:
                             val.Value = "MediumGrid1-Accent2";
                             break;
+
                         case TableDesign.MediumGrid1Accent3:
                             val.Value = "MediumGrid1-Accent3";
                             break;
+
                         case TableDesign.MediumGrid1Accent4:
                             val.Value = "MediumGrid1-Accent4";
                             break;
+
                         case TableDesign.MediumGrid1Accent5:
                             val.Value = "MediumGrid1-Accent5";
                             break;
+
                         case TableDesign.MediumGrid1Accent6:
                             val.Value = "MediumGrid1-Accent6";
                             break;
+
                         case TableDesign.MediumGrid2:
                             val.Value = "MediumGrid2";
                             break;
+
                         case TableDesign.MediumGrid2Accent1:
                             val.Value = "MediumGrid2-Accent1";
                             break;
+
                         case TableDesign.MediumGrid2Accent2:
                             val.Value = "MediumGrid2-Accent2";
                             break;
+
                         case TableDesign.MediumGrid2Accent3:
                             val.Value = "MediumGrid2-Accent3";
                             break;
+
                         case TableDesign.MediumGrid2Accent4:
                             val.Value = "MediumGrid2-Accent4";
                             break;
+
                         case TableDesign.MediumGrid2Accent5:
                             val.Value = "MediumGrid2-Accent5";
                             break;
+
                         case TableDesign.MediumGrid2Accent6:
                             val.Value = "MediumGrid2-Accent6";
                             break;
+
                         case TableDesign.MediumGrid3:
                             val.Value = "MediumGrid3";
                             break;
+
                         case TableDesign.MediumGrid3Accent1:
                             val.Value = "MediumGrid3-Accent1";
                             break;
+
                         case TableDesign.MediumGrid3Accent2:
                             val.Value = "MediumGrid3-Accent2";
                             break;
+
                         case TableDesign.MediumGrid3Accent3:
                             val.Value = "MediumGrid3-Accent3";
                             break;
+
                         case TableDesign.MediumGrid3Accent4:
                             val.Value = "MediumGrid3-Accent4";
                             break;
+
                         case TableDesign.MediumGrid3Accent5:
                             val.Value = "MediumGrid3-Accent5";
                             break;
+
                         case TableDesign.MediumGrid3Accent6:
                             val.Value = "MediumGrid3-Accent6";
                             break;
@@ -1031,21 +863,27 @@ namespace Novacode
                         case TableDesign.DarkList:
                             val.Value = "DarkList";
                             break;
+
                         case TableDesign.DarkListAccent1:
                             val.Value = "DarkList-Accent1";
                             break;
+
                         case TableDesign.DarkListAccent2:
                             val.Value = "DarkList-Accent2";
                             break;
+
                         case TableDesign.DarkListAccent3:
                             val.Value = "DarkList-Accent3";
                             break;
+
                         case TableDesign.DarkListAccent4:
                             val.Value = "DarkList-Accent4";
                             break;
+
                         case TableDesign.DarkListAccent5:
                             val.Value = "DarkList-Accent5";
                             break;
+
                         case TableDesign.DarkListAccent6:
                             val.Value = "DarkList-Accent6";
                             break;
@@ -1053,21 +891,27 @@ namespace Novacode
                         case TableDesign.ColorfulShading:
                             val.Value = "ColorfulShading";
                             break;
+
                         case TableDesign.ColorfulShadingAccent1:
                             val.Value = "ColorfulShading-Accent1";
                             break;
+
                         case TableDesign.ColorfulShadingAccent2:
                             val.Value = "ColorfulShading-Accent2";
                             break;
+
                         case TableDesign.ColorfulShadingAccent3:
                             val.Value = "ColorfulShading-Accent3";
                             break;
+
                         case TableDesign.ColorfulShadingAccent4:
                             val.Value = "ColorfulShading-Accent4";
                             break;
+
                         case TableDesign.ColorfulShadingAccent5:
                             val.Value = "ColorfulShading-Accent5";
                             break;
+
                         case TableDesign.ColorfulShadingAccent6:
                             val.Value = "ColorfulShading-Accent6";
                             break;
@@ -1075,21 +919,27 @@ namespace Novacode
                         case TableDesign.ColorfulList:
                             val.Value = "ColorfulList";
                             break;
+
                         case TableDesign.ColorfulListAccent1:
                             val.Value = "ColorfulList-Accent1";
                             break;
+
                         case TableDesign.ColorfulListAccent2:
                             val.Value = "ColorfulList-Accent2";
                             break;
+
                         case TableDesign.ColorfulListAccent3:
                             val.Value = "ColorfulList-Accent3";
                             break;
+
                         case TableDesign.ColorfulListAccent4:
                             val.Value = "ColorfulList-Accent4";
                             break;
+
                         case TableDesign.ColorfulListAccent5:
                             val.Value = "ColorfulList-Accent5";
                             break;
+
                         case TableDesign.ColorfulListAccent6:
                             val.Value = "ColorfulList-Accent6";
                             break;
@@ -1097,21 +947,27 @@ namespace Novacode
                         case TableDesign.ColorfulGrid:
                             val.Value = "ColorfulGrid";
                             break;
+
                         case TableDesign.ColorfulGridAccent1:
                             val.Value = "ColorfulGrid-Accent1";
                             break;
+
                         case TableDesign.ColorfulGridAccent2:
                             val.Value = "ColorfulGrid-Accent2";
                             break;
+
                         case TableDesign.ColorfulGridAccent3:
                             val.Value = "ColorfulGrid-Accent3";
                             break;
+
                         case TableDesign.ColorfulGridAccent4:
                             val.Value = "ColorfulGrid-Accent4";
                             break;
+
                         case TableDesign.ColorfulGridAccent5:
                             val.Value = "ColorfulGrid-Accent5";
                             break;
+
                         case TableDesign.ColorfulGridAccent6:
                             val.Value = "ColorfulGrid-Accent6";
                             break;
@@ -1134,7 +990,7 @@ namespace Novacode
 
                 if (tableStyle == null)
                 {
-                    XDocument external_style_doc = HelperFunctions.DecompressXMLResource("Novacode.Resources.styles.xml.gz");
+                    XDocument external_style_doc = HelperFunctions.DecompressXMLResource("DocX.Resources.styles.xml.gz");
 
                     var styleElement =
                     (
@@ -1144,8 +1000,8 @@ namespace Novacode
                         select e
                     ).FirstOrDefault();
 
-					if( styleElement != null )
-						Document.styles.Element(XName.Get("styles", DocX.w.NamespaceName)).Add(styleElement);
+                    if (styleElement != null)
+                        Document.styles.Element(XName.Get("styles", DocX.w.NamespaceName)).Add(styleElement);
                 }
             }
         }
@@ -1194,6 +1050,228 @@ namespace Novacode
         }
 
         /// <summary>
+        /// Merge cells in given column starting with startRow and ending with endRow.
+        /// </summary>
+        /// <remarks>
+        /// Added by arudoy patch: 11608
+        /// </remarks>
+        public void MergeCellsInColumn(int columnIndex, int startRow, int endRow)
+        {
+            // Check for valid start and end indexes.
+            if (columnIndex < 0 || columnIndex >= ColumnCount)
+                throw new IndexOutOfRangeException();
+
+            if (startRow < 0 || endRow <= startRow || endRow >= Rows.Count)
+                throw new IndexOutOfRangeException();
+            // Foreach each Cell between startIndex and endIndex inclusive.
+            foreach (Row row in Rows.Where((z, i) => i > startRow && i <= endRow))
+            {
+                Cell c = row.Cells[columnIndex];
+                XElement tcPr = c.Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                if (tcPr == null)
+                {
+                    c.Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
+                    tcPr = c.Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                }
+
+                XElement vMerge = tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+                if (vMerge == null)
+                {
+                    tcPr.SetElementValue(XName.Get("vMerge", DocX.w.NamespaceName), string.Empty);
+                    vMerge = tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+                }
+            }
+
+            /*
+             * Get the tcPr (table cell properties) element for the first cell in this merge,
+            * null will be returned if no such element exists.
+             */
+            XElement start_tcPr;
+            if (columnIndex > Rows[startRow].Cells.Count)
+                start_tcPr = Rows[startRow].Cells[Rows[startRow].Cells.Count - 1].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+            else
+                start_tcPr = Rows[startRow].Cells[columnIndex].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+            if (start_tcPr == null)
+            {
+                Rows[startRow].Cells[columnIndex].Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
+                start_tcPr = Rows[startRow].Cells[columnIndex].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+            }
+
+            /*
+              * Get the gridSpan element of this row,
+              * null will be returned if no such element exists.
+              */
+            XElement start_vMerge = start_tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+            if (start_vMerge == null)
+            {
+                start_tcPr.SetElementValue(XName.Get("vMerge", DocX.w.NamespaceName), string.Empty);
+                start_vMerge = start_tcPr.Element(XName.Get("vMerge", DocX.w.NamespaceName));
+            }
+
+            start_vMerge.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), "restart");
+        }
+
+        /// <summary>
+        /// Set the direction of all content in this Table.
+        /// </summary>
+        /// <param name="direction">(Left to Right) or (Right to Left)</param>
+        /// <example>
+        /// Set the content direction for all content in a table to RightToLeft.
+        /// <code>
+        /// // Load a document.
+        /// using (DocX document = DocX.Load(@"Test.docx"))
+        /// {
+        ///     // Get the first table in a document.
+        ///     Table table = document.Tables[0];
+        ///
+        ///     // Set the content direction for all content in this table to RightToLeft.
+        ///     table.SetDirection(Direction.RightToLeft);
+        ///
+        ///     // Save all changes made to this document.
+        ///     document.Save();
+        /// }
+        /// </code>
+        /// </example>
+        public void SetDirection(Direction direction)
+        {
+            XElement tblPr = GetOrCreate_tblPr();
+            tblPr.Add(new XElement(DocX.w + "bidiVisual"));
+
+            foreach (Row r in Rows)
+                r.SetDirection(direction);
+        }
+
+        public void SetWidths(float[] widths)
+        {
+            this.ColumnWidthsValue = widths;
+            //set widths for existing rows
+            foreach (var r in Rows)
+            {
+                for (var c = 0; c < widths.Length; c++)
+                {
+                    if (r.Cells.Count > c)
+                        r.Cells[c].Width = widths[c];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Set Table column width by prescribing percent
+        /// </summary>
+        /// <param name="widthsPercentage">column width % list</param>
+        /// <param name="totalWidth">Total table width. Will be calculated if null sent.</param>
+        public void SetWidthsPercentage(float[] widthsPercentage, float? totalWidth)
+        {
+            if (totalWidth == null) totalWidth = this.Document.PageWidth - this.Document.MarginLeft - this.Document.MarginRight; // calculate total table width
+            List<float> widths = new List<float>(widthsPercentage.Length); // empty list, will hold actual width
+            widthsPercentage.ToList().ForEach(pWidth => { widths.Add((pWidth * totalWidth.Value / 100) * (96 / 72)); }); // convert percentage to actual width for all values in array
+            SetWidths(widths.ToArray()); // set actual column width
+        }
+
+        /// <summary>
+        /// Set the specified cell margin for the table-level.
+        /// </summary>
+        /// <param name="type">The side of the cell margin.</param>
+        /// <param name="margin">The value for the specified cell margin.</param>
+        /// <remarks>More information can be found <see cref="http://msdn.microsoft.com/en-us/library/documentformat.openxml.wordprocessing.tablecellmargindefault.aspx">here</see></remarks>
+        public void SetTableCellMargin(TableCellMarginType type, double margin)
+#pragma warning restore CS1584 // XML comment has syntactically incorrect cref attribute
+        {
+            XElement tblPr = GetOrCreate_tblPr();
+
+            // find (or create) the element with the cell margins
+            XElement tblCellMar = tblPr.Element(XName.Get("tblCellMar", DocX.w.NamespaceName));
+            if (tblCellMar == null)
+            {
+                tblPr.AddFirst(new XElement(XName.Get("tblCellMar", DocX.w.NamespaceName)));
+                tblCellMar = tblPr.Element(XName.Get("tblCellMar", DocX.w.NamespaceName));
+            }
+
+            // find (or create) the element with cell margin for the specified side
+            XElement tblMargin = tblCellMar.Element(XName.Get(type.ToString(), DocX.w.NamespaceName));
+            if (tblMargin == null)
+            {
+                tblCellMar.AddFirst(new XElement(XName.Get(type.ToString(), DocX.w.NamespaceName)));
+                tblMargin = tblCellMar.Element(XName.Get(type.ToString(), DocX.w.NamespaceName));
+            }
+
+            tblMargin.RemoveAttributes();
+            // set the value for the cell margin
+            tblMargin.Add(new XAttribute(XName.Get("w", DocX.w.NamespaceName), margin));
+            // set the side of cell margin
+            tblMargin.Add(new XAttribute(XName.Get("type", DocX.w.NamespaceName), "dxa"));
+        }
+
+        /// <summary>
+        /// Gets the column width for a given column index.
+        /// </summary>
+        /// <param name="index"></param>
+        public Double GetColumnWidth(Int32 index)
+        {
+            List<Double> widths = ColumnWidths;
+            if (widths == null || index > widths.Count - 1) return Double.NaN;
+
+            return widths[index];
+        }
+
+        /// <summary>
+        /// Sets the column width for the given index.
+        /// </summary>
+        /// <param name="index">Column index</param>
+        /// <param name="width">Colum width</param>
+        public void SetColumnWidth(Int32 index, Double width)
+        {
+            List<Double> widths = ColumnWidths;
+            if (widths == null || index > widths.Count - 1)
+            {
+                if (Rows.Count == 0) throw new Exception("There is at least one row required to detect the existing columns.");
+                // use width of last row cells
+                // may not work for merged cell!
+                widths = new List<Double>();
+                foreach (Cell c in Rows[Rows.Count - 1].Cells)
+                {
+                    widths.Add(c.Width);
+                }
+            }
+
+            // check if index is matching table columns
+            if (index > widths.Count - 1) throw new Exception("The index is greather than the available table columns.");
+
+            // get the table grid props
+            XElement grid = Xml.Element(XName.Get("tblGrid", DocX.w.NamespaceName));
+            // if null; append a new grid below tblPr
+            if (grid == null)
+            {
+                XElement tblPr = GetOrCreate_tblPr();
+                tblPr.AddAfterSelf(new XElement(XName.Get("tblGrid", DocX.w.NamespaceName)));
+                grid = Xml.Element(XName.Get("tblGrid", DocX.w.NamespaceName));
+            }
+
+            // remove all existing values
+            grid?.RemoveAll();
+
+            // append new column widths
+            Int32 i = 0;
+            foreach (var w in widths)
+            {
+                double value = w;
+                if (i == index) value = width;
+                var gridCol = new XElement(XName.Get("gridCol", DocX.w.NamespaceName),
+                    new XAttribute(XName.Get("w", DocX.w.NamespaceName), value));
+                grid?.Add(gridCol);
+                i += 1;
+            }
+
+            // remove cell widths
+            foreach (Row r in Rows)
+                foreach (Cell c in r.Cells)
+                    c.Width = -1;
+
+            // set fitting to fixed; this will add/set additional table properties
+            this.AutoFit = AutoFit.Fixed;
+        }
+
+        /// <summary>
         /// Remove this Table from this document.
         /// </summary>
         /// <example>
@@ -1204,7 +1282,7 @@ namespace Novacode
         /// {
         ///     // Get the first Table in this document.
         ///     Table t = d.Tables[0];
-        ///        
+        ///
         ///     // Remove this Table.
         ///     t.Remove();
         ///
@@ -1228,7 +1306,7 @@ namespace Novacode
         /// {
         ///     // Get the first table in this document.
         ///     Table table = document.Tables[0];
-        ///        
+        ///
         ///     // Insert a new row at the end of this table.
         ///     Row row = table.InsertRow();
         ///
@@ -1250,14 +1328,14 @@ namespace Novacode
             return InsertRow(RowCount);
         }
 
-		/// <summary>
-		/// Insert a copy of a row at the end of this table.
-		/// </summary>      
-		/// <returns>A new row.</returns>
-		/// <param name="row">The row to insert</param>
-		/// <param name="keepFormatting">True to clone everithing, False to clone cell structure only.</param>
-		/// <returns></returns>
-		public Row InsertRow(Row row, bool keepFormatting = false)
+        /// <summary>
+        /// Insert a copy of a row at the end of this table.
+        /// </summary>
+        /// <returns>A new row.</returns>
+        /// <param name="row">The row to insert</param>
+        /// <param name="keepFormatting">True to clone everithing, False to clone cell structure only.</param>
+        /// <returns></returns>
+        public Row InsertRow(Row row, bool keepFormatting = false)
         {
             return InsertRow(row, RowCount, keepFormatting);
         }
@@ -1417,7 +1495,7 @@ namespace Novacode
                     var positionIndex = 0;
                     var actualPosition = 0;
                     var gridAfterVal = 0;
-                    // checks to see if there is a deleted cell                    
+                    // checks to see if there is a deleted cell
                     gridAfterVal = r.gridAfter;
 
                     // goes through iteration of cells to find the one the that contains the index number
@@ -1460,7 +1538,7 @@ namespace Novacode
         /// {
         ///     // Get the first table in this document.
         ///     Table table = document.Tables[0];
-        ///        
+        ///
         ///     // Insert a new row at index 1 in this table.
         ///     Row row = table.InsertRow(1);
         ///
@@ -1496,14 +1574,14 @@ namespace Novacode
             return InsertRow(content, index);
         }
 
-		/// <summary>
-		/// Insert a copy of a row into this table.
-		/// </summary>
-		/// <param name="row">Row to copy and insert.</param>
-		/// <param name="index">Index to insert row at.</param>
-		/// <param name="keepFormatting">True to clone everithing, False to clone cell structure only.</param>
-		/// <returns>A new Row</returns>
-		public Row InsertRow(Row row, int index, bool keepFormatting = false)
+        /// <summary>
+        /// Insert a copy of a row into this table.
+        /// </summary>
+        /// <param name="row">Row to copy and insert.</param>
+        /// <param name="index">Index to insert row at.</param>
+        /// <param name="keepFormatting">True to clone everithing, False to clone cell structure only.</param>
+        /// <returns>A new Row</returns>
+        public Row InsertRow(Row row, int index, bool keepFormatting = false)
         {
             if (row == null)
                 throw new ArgumentNullException(nameof(row));
@@ -1511,33 +1589,13 @@ namespace Novacode
             if (index < 0 || index > RowCount)
                 throw new IndexOutOfRangeException();
 
-			List<XElement> content;
-			if( keepFormatting )
-				content = row.Xml.Elements().Select(element => HelperFunctions.CloneElement(element)).ToList();
-			else
-				content = row.Xml.Elements(XName.Get("tc", DocX.w.NamespaceName)).Select(element => HelperFunctions.CloneElement(element)).ToList();
-
-			return InsertRow(content, index);
-        }
-
-        private Row InsertRow(List<XElement> content, Int32 index)
-        {
-            Row newRow = new Row(this, Document, new XElement(XName.Get("tr", DocX.w.NamespaceName), content));
-
-            XElement rowXml;
-            if (index == Rows.Count)
-            {
-                rowXml = Rows.Last().Xml;
-                rowXml.AddAfterSelf(newRow.Xml);
-            }
-
+            List<XElement> content;
+            if (keepFormatting)
+                content = row.Xml.Elements().Select(element => HelperFunctions.CloneElement(element)).ToList();
             else
-            {
-                rowXml = Rows[index].Xml;
-                rowXml.AddBeforeSelf(newRow.Xml);
-            }
+                content = row.Xml.Elements(XName.Get("tc", DocX.w.NamespaceName)).Select(element => HelperFunctions.CloneElement(element)).ToList();
 
-            return newRow;
+            return InsertRow(content, index);
         }
 
         /// <summary>
@@ -1593,7 +1651,7 @@ namespace Novacode
                         // create cell
                         XElement cell = HelperFunctions.CreateTableCell();
 
-                        // insert cell 
+                        // insert cell
                         // checks if it is in bounds of index
                         if (r.Cells.Count < columnCount)
                         {
@@ -1658,33 +1716,12 @@ namespace Novacode
         }
 
         /// <summary>
-        /// Adds a cell to the right or left of a cell
-        /// </summary>
-        /// <param name="row">is the row you are adding</param>
-        /// <param name="cell">is the cell you are adding</param>
-        /// <param name="index">the cell index position you are refferencing from</param>
-        /// <param name="direction">which side of the cell you wish to add cell</param>
-
-        private void AddCellToRow(Row row, XElement cell, int index, bool direction)
-        {
-            index -= 1;
-            if (direction)
-            {
-                row.Cells[index].Xml.AddAfterSelf(cell);
-            }
-            else
-            {
-                row.Cells[index].Xml.AddBeforeSelf(cell);
-            }
-        }
-        /// <summary>
         /// Deletes a cell in a row
         /// </summary>
         /// <param name="rowIndex">index of the row you want to remove the cell</param>
         /// <param name="celIndex">index of the cell you want to remove</param>
         public void DeleteAndShiftCellsLeft(int rowIndex, int celIndex)
         {
-            
             var trPr = Rows[rowIndex].Xml.Element(XName.Get("trPr", DocX.w.NamespaceName));
             if (trPr != null)
             {
@@ -1723,17 +1760,17 @@ namespace Novacode
         /// <code>
         /// // Create a new document.
         /// using (DocX document = DocX.Create(@"Test.docx"))
-        /// {              
+        /// {
         ///     // Insert a new Paragraph.
         ///     Paragraph p1 = document.InsertParagraph("Paragraph", false);
         ///
         ///     // Insert a new Table.
         ///     Table t1 = document.InsertTable(2, 2);
         ///     t1.Design = TableDesign.LightShadingAccent1;
-        ///     
+        ///
         ///     // Insert a page break before this Table.
         ///     t1.InsertPageBreakBeforeSelf();
-        ///     
+        ///
         ///     // Save this document.
         ///     document.Save();
         /// }// Release this document from memory.
@@ -1743,7 +1780,6 @@ namespace Novacode
         {
             base.InsertPageBreakBeforeSelf();
         }
-
 
         /// <summary>
         /// Insert a page break after a Table.
@@ -1757,10 +1793,10 @@ namespace Novacode
         ///     // Insert a new Table.
         ///     Table t1 = document.InsertTable(2, 2);
         ///     t1.Design = TableDesign.LightShadingAccent1;
-        ///        
+        ///
         ///     // Insert a page break after this Table.
         ///     t1.InsertPageBreakAfterSelf();
-        ///        
+        ///
         ///     // Insert a new Paragraph.
         ///     Paragraph p1 = document.InsertParagraph("Paragraph", false);
         ///
@@ -1826,7 +1862,7 @@ namespace Novacode
         ///     Table t = document.InsertTable(2, 2);
         ///     t.Design = TableDesign.LightShadingAccent1;
         ///     t.Alignment = Alignment.center;
-        ///     
+        ///
         ///     // Insert a new Table before this Table.
         ///     Table newTable = t.InsertTableBeforeSelf(2, 2);
         ///     newTable.Design = TableDesign.LightShadingAccent2;
@@ -1894,7 +1930,7 @@ namespace Novacode
         ///     Table t = document.InsertTable(2, 2);
         ///     t.Design = TableDesign.LightShadingAccent1;
         ///     t.Alignment = Alignment.center;
-        ///     
+        ///
         ///     // Insert a new Table after this Table.
         ///     Table newTable = t.InsertTableAfterSelf(2, 2);
         ///     newTable.Design = TableDesign.LightShadingAccent2;
@@ -1940,7 +1976,7 @@ namespace Novacode
         ///     // Save all changes made to document b.
         ///     documentB.Save();
         /// }// Release this document from memory.
-        /// </code> 
+        /// </code>
         /// </example>
         public override Paragraph InsertParagraphBeforeSelf(Paragraph p)
         {
@@ -2061,7 +2097,7 @@ namespace Novacode
         ///     // Save all changes made to document b.
         ///     documentB.Save();
         /// }// Release this document from memory.
-        /// </code> 
+        /// </code>
         /// </example>
         public override Paragraph InsertParagraphAfterSelf(Paragraph p)
         {
@@ -2392,6 +2428,67 @@ namespace Novacode
             return b;
         }
 
+        /// <summary>
+        /// If the tblPr element doesent exist it is created, either way it is returned by this function.
+        /// </summary>
+        /// <returns>The tblPr element for this Table.</returns>
+        internal XElement GetOrCreate_tblPr()
+        {
+            // Get the element.
+            XElement tblPr = Xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
+
+            // If it dosen't exist, create it.
+            if (tblPr == null)
+            {
+                Xml.AddFirst(new XElement(XName.Get("tblPr", DocX.w.NamespaceName)));
+                tblPr = Xml.Element(XName.Get("tblPr", DocX.w.NamespaceName));
+            }
+
+            // Return the pPr element for this Paragraph.
+            return tblPr;
+        }
+
+#pragma warning disable CS1584 // XML comment has syntactically incorrect cref attribute
+
+        private Row InsertRow(List<XElement> content, Int32 index)
+        {
+            Row newRow = new Row(this, Document, new XElement(XName.Get("tr", DocX.w.NamespaceName), content));
+
+            XElement rowXml;
+            if (index == Rows.Count)
+            {
+                rowXml = Rows.Last().Xml;
+                rowXml.AddAfterSelf(newRow.Xml);
+            }
+            else
+            {
+                rowXml = Rows[index].Xml;
+                rowXml.AddBeforeSelf(newRow.Xml);
+            }
+
+            return newRow;
+        }
+
+        /// <summary>
+        /// Adds a cell to the right or left of a cell
+        /// </summary>
+        /// <param name="row">is the row you are adding</param>
+        /// <param name="cell">is the cell you are adding</param>
+        /// <param name="index">the cell index position you are refferencing from</param>
+        /// <param name="direction">which side of the cell you wish to add cell</param>
+
+        private void AddCellToRow(Row row, XElement cell, int index, bool direction)
+        {
+            index -= 1;
+            if (direction)
+            {
+                row.Cells[index].Xml.AddAfterSelf(cell);
+            }
+            else
+            {
+                row.Cells[index].Xml.AddBeforeSelf(cell);
+            }
+        }
     }
 
     /// <summary>
@@ -2399,6 +2496,27 @@ namespace Novacode
     /// </summary>
     public class Row : Container
     {
+        internal Table table;
+
+        /// <summary>
+        /// The property name to set when specifiying an exact height
+        /// </summary>
+        /// <created>Nick Kusters</created>
+        private const string _hRule_Exact = "exact";
+
+        /// <summary>
+        /// The property name to set when specifying a minimum height
+        /// </summary>
+        /// <created>Nick Kusters</created>
+        private const string _hRule_AtLeast = "atLeast";
+
+        internal Row(Table table, DocX document, XElement xml)
+                    : base(document, xml)
+        {
+            this.table = table;
+            this.mainPart = table.mainPart;
+        }
+
         /// <summary>
         /// Calculates columns count in the row, taking spanned cells into account
         /// </summary>
@@ -2463,15 +2581,6 @@ namespace Novacode
             }
         }
 
-        public void Remove()
-        {
-            XElement table = Xml.Parent;
-
-            Xml.Remove();
-            if (!table.Elements(XName.Get("tr", DocX.w.NamespaceName)).Any())
-                table.Remove();
-        }
-
         public override ReadOnlyCollection<Paragraph> Paragraphs
         {
             get
@@ -2489,24 +2598,6 @@ namespace Novacode
             }
         }
 
-        internal Table table;
-        internal Row(Table table, DocX document, XElement xml)
-            : base(document, xml)
-        {
-            this.table = table;
-            this.mainPart = table.mainPart;
-        }
-
-        /// <summary>
-        /// The property name to set when specifiying an exact height
-        /// </summary>
-        /// <created>Nick Kusters</created>
-        const string _hRule_Exact = "exact";
-        /// <summary>
-        /// The property name to set when specifying a minimum height
-        /// </summary>
-        /// <created>Nick Kusters</created>
-        const string _hRule_AtLeast = "atLeast";
         /// <summary>
         /// Height in pixels. // Added by Joel, refactored by Cathal.
         /// </summary>
@@ -2547,54 +2638,7 @@ namespace Novacode
                 SetHeight(value, true);
             }
         }
-        /// <summary>
-        /// Helper method to set either the exact height or the min-height
-        /// </summary>
-        /// <param name="height">The height value to set (in pixels)</param>
-        /// <param name="exact">
-        /// If true, the height will be forced. 
-        /// If false, it will be treated as a minimum height, auto growing past it if need be.
-        /// </param>
-        /// <created>Nick Kusters</created>
-        void SetHeight(double height, bool exact)
-        {
-            /*
-             * Get the trPr (table row properties) element for this Row,
-             * null will be return if no such element exists.
-             */
-            XElement trPr = Xml.Element(XName.Get("trPr", DocX.w.NamespaceName));
-            if (trPr == null)
-            {
-				Xml.SetElementValue(XName.Get("trPr", DocX.w.NamespaceName), string.Empty);
-				trPr = Xml.Element(XName.Get("trPr", DocX.w.NamespaceName));
 
-				// Swapping trPr and tc elements - making trPr the first
-				XElement tc = Xml.Element( XName.Get( "tc", DocX.w.NamespaceName ) );
-				if( tc != null )
-				{
-					trPr.Remove();
-					tc.AddBeforeSelf( trPr );
-				}
-			}
-
-			/*
-             * Get the trHeight element for this Row,
-             * null will be return if no such element exists.
-             */
-			XElement trHeight = trPr.Element(XName.Get("trHeight", DocX.w.NamespaceName));
-            if (trHeight == null)
-            {
-                trPr.SetElementValue(XName.Get("trHeight", DocX.w.NamespaceName), string.Empty);
-                trHeight = trPr.Element(XName.Get("trHeight", DocX.w.NamespaceName));
-            }
-
-            // The hRule attribute needs to be set to exact.
-            trHeight.SetAttributeValue(XName.Get("hRule", DocX.w.NamespaceName), exact ? _hRule_Exact : _hRule_AtLeast);
-
-            // 15 "word units" is equal to one pixel. 
-            trHeight.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName),
-				((int)(Math.Round(height * 15,0))).ToString( CultureInfo.InvariantCulture ));	// national separators anf fraction should be avoided
-        }
         /// <summary>
         /// Min-Height in pixels. // Added by Nick Kusters.
         /// </summary>
@@ -2615,11 +2659,10 @@ namespace Novacode
             }
         }
 
-
         /// <summary>
-		/// Set to true to make this row the table header row that will be repeated on each page
-		/// </summary>
-		public bool TableHeader
+        /// Set to true to make this row the table header row that will be repeated on each page
+        /// </summary>
+        public bool TableHeader
         {
             get
             {
@@ -2649,10 +2692,9 @@ namespace Novacode
             }
         }
 
-
         /// <summary>
-        /// Allow row to break across pages. 
-        /// The default value is true: Word will break the contents of the row across pages. 
+        /// Allow row to break across pages.
+        /// The default value is true: Word will break the contents of the row across pages.
         /// If set to false, the contents of the row will not be split across pages, the entire row will be moved to the next page instead.
         /// </summary>
         public bool BreakAcrossPages
@@ -2690,6 +2732,15 @@ namespace Novacode
             }
         }
 
+        public void Remove()
+        {
+            XElement table = Xml.Parent;
+
+            Xml.Remove();
+            if (!table.Elements(XName.Get("tr", DocX.w.NamespaceName)).Any())
+                table.Remove();
+        }
+
         /// <summary>
         /// Merge cells starting with startIndex and ending with endIndex.
         /// </summary>
@@ -2713,7 +2764,7 @@ namespace Novacode
 
                     int value;
                     if (val != null && int.TryParse(val.Value, out value))
-                            gridSpanSum += value - 1;
+                        gridSpanSum += value - 1;
                 }
 
                 // Add this cells Pragraph to the merge start Cell.
@@ -2723,7 +2774,7 @@ namespace Novacode
                 c.Xml.Remove();
             }
 
-            /* 
+            /*
              * Get the tcPr (table cell properties) element for the first cell in this merge,
              * null will be returned if no such element exists.
              */
@@ -2734,7 +2785,7 @@ namespace Novacode
                 start_tcPr = Cells[startIndex].Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
             }
 
-            /* 
+            /*
              * Get the gridSpan element of this row,
              * null will be returned if no such element exists.
              */
@@ -2745,7 +2796,7 @@ namespace Novacode
                 start_gridSpan = start_tcPr.Element(XName.Get("gridSpan", DocX.w.NamespaceName));
             }
 
-            /* 
+            /*
              * Get the val attribute of this row,
              * null will be returned if no such element exists.
              */
@@ -2758,6 +2809,55 @@ namespace Novacode
 
             // Set the val attribute to the number of merged cells.
             start_gridSpan.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), (gridSpanSum + (endIndex - startIndex + 1)).ToString());
+        }
+
+        /// <summary>
+        /// Helper method to set either the exact height or the min-height
+        /// </summary>
+        /// <param name="height">The height value to set (in pixels)</param>
+        /// <param name="exact">
+        /// If true, the height will be forced.
+        /// If false, it will be treated as a minimum height, auto growing past it if need be.
+        /// </param>
+        /// <created>Nick Kusters</created>
+        private void SetHeight(double height, bool exact)
+        {
+            /*
+             * Get the trPr (table row properties) element for this Row,
+             * null will be return if no such element exists.
+             */
+            XElement trPr = Xml.Element(XName.Get("trPr", DocX.w.NamespaceName));
+            if (trPr == null)
+            {
+                Xml.SetElementValue(XName.Get("trPr", DocX.w.NamespaceName), string.Empty);
+                trPr = Xml.Element(XName.Get("trPr", DocX.w.NamespaceName));
+
+                // Swapping trPr and tc elements - making trPr the first
+                XElement tc = Xml.Element(XName.Get("tc", DocX.w.NamespaceName));
+                if (tc != null)
+                {
+                    trPr.Remove();
+                    tc.AddBeforeSelf(trPr);
+                }
+            }
+
+            /*
+             * Get the trHeight element for this Row,
+             * null will be return if no such element exists.
+             */
+            XElement trHeight = trPr.Element(XName.Get("trHeight", DocX.w.NamespaceName));
+            if (trHeight == null)
+            {
+                trPr.SetElementValue(XName.Get("trHeight", DocX.w.NamespaceName), string.Empty);
+                trHeight = trPr.Element(XName.Get("trHeight", DocX.w.NamespaceName));
+            }
+
+            // The hRule attribute needs to be set to exact.
+            trHeight.SetAttributeValue(XName.Get("hRule", DocX.w.NamespaceName), exact ? _hRule_Exact : _hRule_AtLeast);
+
+            // 15 "word units" is equal to one pixel.
+            trHeight.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName),
+                ((int)(Math.Round(height * 15, 0))).ToString(CultureInfo.InvariantCulture));	// national separators anf fraction should be avoided
         }
     }
 
@@ -2784,6 +2884,7 @@ namespace Novacode
                 return paragraphs;
             }
         }
+
         /// <summary>
         /// Returns the GridSpan of a specific Cell ie. How many cells are merged
         /// </summary>
@@ -2800,7 +2901,7 @@ namespace Novacode
 
                     int value;
                     if (val != null && int.TryParse(val.Value, out value))
-                            gridSpanVal = value;
+                        gridSpanVal = value;
                 }
                 return gridSpanVal;
             }
@@ -2874,7 +2975,6 @@ namespace Novacode
                 {
                     return (VerticalAlignment)Enum.Parse(typeof(VerticalAlignment), val.Value, true);
                 }
-
                 catch
                 {
                     val.Remove();
@@ -2893,7 +2993,6 @@ namespace Novacode
                     tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
                 }
 
-                
                 // Get the vAlign (table cell vertical alignment) element for this Cell,
                 // null will be return if no such element exists.
                 XElement vAlign = tcPr.Element(XName.Get("vAlign", DocX.w.NamespaceName));
@@ -3035,7 +3134,7 @@ namespace Novacode
                 // The type attribute needs to be set to dxa which represents "twips" or twentieths of a point. In other words, 1/1440th of an inch.
                 tcW.SetAttributeValue(XName.Get("type", DocX.w.NamespaceName), "dxa");
 
-                // 15 "word units" is equal to one pixel. 
+                // 15 "word units" is equal to one pixel.
                 tcW.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), (value * 15).ToString());
             }
         }
@@ -3082,7 +3181,7 @@ namespace Novacode
 
                 /*
                  * Get the tcMar
-                 * 
+                 *
                  */
                 XElement tcMar = tcPr.Element(XName.Get("tcMar", DocX.w.NamespaceName));
 
@@ -3148,7 +3247,7 @@ namespace Novacode
                 // The type attribute needs to be set to dxa which represents "twips" or twentieths of a point. In other words, 1/1440th of an inch.
                 tcMarLeft.SetAttributeValue(XName.Get("type", DocX.w.NamespaceName), "dxa");
 
-                // 15 "word units" is equal to one pixel. 
+                // 15 "word units" is equal to one pixel.
                 tcMarLeft.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), (value * 15).ToString());
             }
         }
@@ -3195,7 +3294,7 @@ namespace Novacode
 
                 /*
                  * Get the tcMar
-                 * 
+                 *
                  */
                 XElement tcMar = tcPr.Element(XName.Get("tcMar", DocX.w.NamespaceName));
 
@@ -3261,7 +3360,7 @@ namespace Novacode
                 // The type attribute needs to be set to dxa which represents "twips" or twentieths of a point. In other words, 1/1440th of an inch.
                 tcMarRight.SetAttributeValue(XName.Get("type", DocX.w.NamespaceName), "dxa");
 
-                // 15 "word units" is equal to one pixel. 
+                // 15 "word units" is equal to one pixel.
                 tcMarRight.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), (value * 15).ToString());
             }
         }
@@ -3308,7 +3407,7 @@ namespace Novacode
 
                 /*
                  * Get the tcMar
-                 * 
+                 *
                  */
                 XElement tcMar = tcPr.Element(XName.Get("tcMar", DocX.w.NamespaceName));
 
@@ -3374,7 +3473,7 @@ namespace Novacode
                 // The type attribute needs to be set to dxa which represents "twips" or twentieths of a point. In other words, 1/1440th of an inch.
                 tcMarTop.SetAttributeValue(XName.Get("type", DocX.w.NamespaceName), "dxa");
 
-                // 15 "word units" is equal to one pixel. 
+                // 15 "word units" is equal to one pixel.
                 tcMarTop.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), (value * 15).ToString());
             }
         }
@@ -3419,7 +3518,7 @@ namespace Novacode
 
                 /*
                  * Get the tcMar
-                 * 
+                 *
                  */
                 XElement tcMar = tcPr?.Element(XName.Get("tcMar", DocX.w.NamespaceName));
 
@@ -3489,8 +3588,130 @@ namespace Novacode
                 // The type attribute needs to be set to dxa which represents "twips" or twentieths of a point. In other words, 1/1440th of an inch.
                 tcMarBottom.SetAttributeValue(XName.Get("type", DocX.w.NamespaceName), "dxa");
 
-                // 15 "word units" is equal to one pixel. 
+                // 15 "word units" is equal to one pixel.
                 tcMarBottom.SetAttributeValue(XName.Get("w", DocX.w.NamespaceName), (value * 15).ToString());
+            }
+        }
+
+        /// <summary>
+        /// Gets or Sets the fill color of this Cell.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// // Create a new document.
+        /// using (DocX document = DocX.Create("Test.docx"))
+        /// {
+        ///    // Insert a table into this document.
+        ///    Table t = document.InsertTable(3, 3);
+        ///
+        ///    // Fill the first cell as Blue.
+        ///    t.Rows[0].Cells[0].FillColor = Color.Blue;
+        ///    // Fill the middle cell as Red.
+        ///    t.Rows[1].Cells[1].FillColor = Color.Red;
+        ///    // Fill the last cell as Green.
+        ///    t.Rows[2].Cells[2].FillColor = Color.Green;
+        ///
+        ///    // Save the document.
+        ///    document.Save();
+        /// }
+        /// </code>
+        /// </example>
+        public Color FillColor
+        {
+            get
+            {
+                /*
+                 * Get the tcPr (table cell properties) element for this Cell,
+                 * null will be return if no such element exists.
+                 */
+                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                XElement shd = tcPr?.Element(XName.Get("shd", DocX.w.NamespaceName));
+                XAttribute fill = shd?.Attribute(XName.Get("fill", DocX.w.NamespaceName));
+                if (fill == null)
+                    return Color.Empty;
+                int argb = Int32.Parse(fill.Value.Replace("#", ""), NumberStyles.HexNumber);
+                return Color.FromArgb(argb);
+            }
+
+            set
+            {
+                /*
+                 * Get the tcPr (table cell properties) element for this Cell,
+                 * null will be return if no such element exists.
+                 */
+                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                if (tcPr == null)
+                {
+                    Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
+                    tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                }
+
+                /*
+                 * Get the tcW (table cell width) element for this Cell,
+                 * null will be return if no such element exists.
+                 */
+                XElement shd = tcPr.Element(XName.Get("shd", DocX.w.NamespaceName));
+                if (shd == null)
+                {
+                    tcPr.SetElementValue(XName.Get("shd", DocX.w.NamespaceName), string.Empty);
+                    shd = tcPr.Element(XName.Get("shd", DocX.w.NamespaceName));
+                }
+
+                shd.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), "clear");
+                shd.SetAttributeValue(XName.Get("color", DocX.w.NamespaceName), "auto");
+                shd.SetAttributeValue(XName.Get("fill", DocX.w.NamespaceName), value.ToHex());
+            }
+        }
+
+        public TextDirection TextDirection
+        {
+            get
+            {
+                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+
+                // If tcPr is null, this cell contains no width information.
+                XElement textDirection = tcPr?.Element(XName.Get("textDirection", DocX.w.NamespaceName));
+                XAttribute val = textDirection?.Attribute(XName.Get("val", DocX.w.NamespaceName));
+                if (val == null)
+                    return TextDirection.right;
+
+                // If val is not a VerticalAlign enum, something is wrong with this attributes value, so remove it and return VerticalAlignment.Center;
+                try
+                {
+                    return (TextDirection)Enum.Parse(typeof(TextDirection), val.Value, true);
+                }
+                catch
+                {
+                    val.Remove();
+                    return TextDirection.right;
+                }
+            }
+            set
+            {
+                /*
+                    * Get the tcPr (table cell properties) element for this Cell,
+                    * null will be return if no such element exists.
+                    */
+                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                if (tcPr == null)
+                {
+                    Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
+                    tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
+                }
+
+                /*
+                 * Get the vAlign (table cell vertical alignment) element for this Cell,
+                 * null will be return if no such element exists.
+                 */
+                XElement textDirection = tcPr.Element(XName.Get("textDirection", DocX.w.NamespaceName));
+                if (textDirection == null)
+                {
+                    tcPr.SetElementValue(XName.Get("textDirection", DocX.w.NamespaceName), string.Empty);
+                    textDirection = tcPr.Element(XName.Get("textDirection", DocX.w.NamespaceName));
+                }
+
+                // Set the VerticalAlignment in 'val'
+                textDirection.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), value.ToString());
             }
         }
 
@@ -3559,9 +3780,11 @@ namespace Novacode
                 case TableCellBorderType.TopLeftToBottomRight:
                     tcbordertype = "tl2br";
                     break;
+
                 case TableCellBorderType.TopRightToBottomLeft:
                     tcbordertype = "tr2bl";
                     break;
+
                 default:
                     // enum to string
                     tcbordertype = borderType.ToString();
@@ -3609,7 +3832,6 @@ namespace Novacode
             tcBorderType.SetAttributeValue(XName.Get("color", DocX.w.NamespaceName), border.Color.ToHex());
         }
 
-
         /// <summary>
         /// Get a table cell border
         /// Added by lckuiper @ 20101117
@@ -3651,9 +3873,11 @@ namespace Novacode
                 case "TopLeftToBottomRight":
                     tcbordertype = "tl2br";
                     break;
+
                 case "TopRightToBottomLeft":
                     tcbordertype = "tr2bl";
                     break;
+
                 default:
                     // only lower the first char of string (because of insideH and insideV)
                     tcbordertype = tcbordertype.Substring(0, 1).ToLower() + tcbordertype.Substring(1);
@@ -3680,7 +3904,6 @@ namespace Novacode
                     string bordertype = "Tcbs_" + val.Value;
                     b.Tcbs = (BorderStyle)Enum.Parse(typeof(BorderStyle), bordertype);
                 }
-
                 catch
                 {
                     val.Remove();
@@ -3763,76 +3986,6 @@ namespace Novacode
             return b;
         }
 
-        /// <summary>
-        /// Gets or Sets the fill color of this Cell.
-        /// </summary>
-        /// <example>
-        /// <code>
-        /// // Create a new document.
-        /// using (DocX document = DocX.Create("Test.docx"))
-        /// {
-        ///    // Insert a table into this document.
-        ///    Table t = document.InsertTable(3, 3);
-        ///
-        ///    // Fill the first cell as Blue.
-        ///    t.Rows[0].Cells[0].FillColor = Color.Blue;
-        ///    // Fill the middle cell as Red.
-        ///    t.Rows[1].Cells[1].FillColor = Color.Red;
-        ///    // Fill the last cell as Green.
-        ///    t.Rows[2].Cells[2].FillColor = Color.Green;
-        ///
-        ///    // Save the document.
-        ///    document.Save();
-        /// }
-        /// </code>
-        /// </example>
-        public Color FillColor
-        {
-            get
-            {
-                /*
-                 * Get the tcPr (table cell properties) element for this Cell,
-                 * null will be return if no such element exists.
-                 */
-                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                XElement shd = tcPr?.Element(XName.Get("shd", DocX.w.NamespaceName));
-                XAttribute fill = shd?.Attribute(XName.Get("fill", DocX.w.NamespaceName));
-                if (fill == null)
-                    return Color.Empty;
-                int argb = Int32.Parse(fill.Value.Replace("#", ""), NumberStyles.HexNumber);
-                return Color.FromArgb(argb);
-            }
-
-            set
-            {
-                /*
-                 * Get the tcPr (table cell properties) element for this Cell,
-                 * null will be return if no such element exists.
-                 */
-                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                if (tcPr == null)
-                {
-                    Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
-                    tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                }
-
-                /*
-                 * Get the tcW (table cell width) element for this Cell,
-                 * null will be return if no such element exists.
-                 */
-                XElement shd = tcPr.Element(XName.Get("shd", DocX.w.NamespaceName));
-                if (shd == null)
-                {
-                    tcPr.SetElementValue(XName.Get("shd", DocX.w.NamespaceName), string.Empty);
-                    shd = tcPr.Element(XName.Get("shd", DocX.w.NamespaceName));
-                }
-
-                shd.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), "clear");
-                shd.SetAttributeValue(XName.Get("color", DocX.w.NamespaceName), "auto");
-                shd.SetAttributeValue(XName.Get("fill", DocX.w.NamespaceName), value.ToHex());
-            }
-        }
-
         public override Table InsertTable(int rowCount, int columnCount)
         {
             Table table = base.InsertTable(rowCount, columnCount);
@@ -3841,61 +3994,7 @@ namespace Novacode
             //IMPORTANT: It will be better to check all methods that work with adding anything to cells
             return table;
         }
-
-        public TextDirection TextDirection
-        {
-            get
-            {
-                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-
-                // If tcPr is null, this cell contains no width information.
-                XElement textDirection = tcPr?.Element(XName.Get("textDirection", DocX.w.NamespaceName));
-                XAttribute val = textDirection?.Attribute(XName.Get("val", DocX.w.NamespaceName));
-                if (val == null)
-                    return TextDirection.right;
-
-                // If val is not a VerticalAlign enum, something is wrong with this attributes value, so remove it and return VerticalAlignment.Center;
-                try
-                {
-                    return (TextDirection)Enum.Parse(typeof(TextDirection), val.Value, true);
-                }
-                catch
-                {
-                    val.Remove();
-                    return TextDirection.right;
-                }
-            }
-            set
-            {
-                /*
-                    * Get the tcPr (table cell properties) element for this Cell,
-                    * null will be return if no such element exists.
-                    */
-                XElement tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                if (tcPr == null)
-                {
-                    Xml.SetElementValue(XName.Get("tcPr", DocX.w.NamespaceName), string.Empty);
-                    tcPr = Xml.Element(XName.Get("tcPr", DocX.w.NamespaceName));
-                }
-
-                /*
-                 * Get the vAlign (table cell vertical alignment) element for this Cell,
-                 * null will be return if no such element exists.
-                 */
-                XElement textDirection = tcPr.Element(XName.Get("textDirection", DocX.w.NamespaceName));
-                if (textDirection == null)
-                {
-                    tcPr.SetElementValue(XName.Get("textDirection", DocX.w.NamespaceName), string.Empty);
-                    textDirection = tcPr.Element(XName.Get("textDirection", DocX.w.NamespaceName));
-                }
-
-                // Set the VerticalAlignment in 'val'
-                textDirection.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), value.ToString());
-
-            }
-        }
     }
-
 
     public class TableLook
     {
@@ -3906,5 +4005,4 @@ namespace Novacode
         public bool NoHorizontalBanding { get; set; }
         public bool NoVerticalBanding { get; set; }
     }
-
 }

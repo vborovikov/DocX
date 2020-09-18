@@ -10,27 +10,29 @@ namespace Novacode
     /// </summary>
     public class List : InsertBeforeOrAfter
     {
+        internal List(DocX document, XElement xml)
+                    : base(document, xml)
+        {
+            Items = new List<Paragraph>();
+            ListType = null;
+        }
+
         /// <summary>
         /// This is a list of paragraphs that will be added to the document
         /// when the list is inserted into the document.
         /// The paragraph needs a numPr defined to be in this items collection.
         /// </summary>
         public List<Paragraph> Items { get; private set; }
+
         /// <summary>
         /// The numId used to reference the list settings in the numbering.xml
         /// </summary>
         public int NumId { get; private set; }
+
         /// <summary>
         /// The ListItemType (bullet or numbered) of the list.
         /// </summary>
         public ListItemType? ListType { get; private set; }
-
-        internal List(DocX document, XElement xml)
-            : base(document, xml)
-        {
-            Items = new List<Paragraph>();
-            ListType = null;
-        }
 
         /// <summary>
         /// Adds an item to the list.
@@ -63,13 +65,6 @@ namespace Novacode
             if (ContainsLevel(start))
                 throw new InvalidOperationException("Cannot add a paragraph with a start value if another element already exists in this list with that level.");
             AddItem(paragraph);
-        }
-
-        private void UpdateNumberingForLevelStartNumber(int iLevel, int start)
-        {
-            var abstractNum = GetAbstractNum(NumId);
-            var level = abstractNum.Descendants().First(el => el.Name.LocalName == "lvl" && el.GetAttribute(DocX.w + "ilvl") == iLevel.ToString());
-            level.Descendants().First(el => el.Name.LocalName == "start").SetAttributeValue(DocX.w + "val", start);
         }
 
         /// <summary>
@@ -118,18 +113,20 @@ namespace Novacode
             switch (listType)
             {
                 case ListItemType.Bulleted:
-                    listTemplate = HelperFunctions.DecompressXMLResource("Novacode.Resources.numbering.default_bullet_abstract.xml.gz");
+                    listTemplate = HelperFunctions.DecompressXMLResource("DocX.Resources.numbering.default_bullet_abstract.xml.gz");
                     break;
+
                 case ListItemType.Numbered:
-                    listTemplate = HelperFunctions.DecompressXMLResource("Novacode.Resources.numbering.default_decimal_abstract.xml.gz");
+                    listTemplate = HelperFunctions.DecompressXMLResource("DocX.Resources.numbering.default_decimal_abstract.xml.gz");
                     break;
+
                 default:
                     throw new InvalidOperationException(string.Format("Unable to deal with ListItemType: {0}.", listType.ToString()));
             }
 
             var abstractNumTemplate = listTemplate.Descendants().Single(d => d.Name.LocalName == "abstractNum");
             abstractNumTemplate.SetAttributeValue(DocX.w + "abstractNumId", abstractNumId);
-            
+
             //Fixing an issue where numbering would continue from previous numbered lists. Setting startOverride assures that a numbered list starts on the provided number.
             //The override needs only be on level 0 as this will cascade to the rest of the list.
             var abstractNumXml = GetAbstractNumXml(abstractNumId, numId, startNumber, continueNumbering);
@@ -153,6 +150,25 @@ namespace Novacode
             NumId = numId;
         }
 
+        /// <summary>
+        /// Get the abstractNum definition for the given numId
+        /// </summary>
+        /// <param name="numId">The numId on the pPr element</param>
+        /// <returns>XElement representing the requested abstractNum</returns>
+        internal XElement GetAbstractNum(int numId)
+        {
+            var num = Document.numbering.Descendants().First(d => d.Name.LocalName == "num" && d.GetAttribute(DocX.w + "numId").Equals(numId.ToString()));
+            var abstractNumId = num.Descendants().First(d => d.Name.LocalName == "abstractNumId");
+            return Document.numbering.Descendants().First(d => d.Name.LocalName == "abstractNum" && d.GetAttribute("abstractNumId").Equals(abstractNumId.Value));
+        }
+
+        private void UpdateNumberingForLevelStartNumber(int iLevel, int start)
+        {
+            var abstractNum = GetAbstractNum(NumId);
+            var level = abstractNum.Descendants().First(el => el.Name.LocalName == "lvl" && el.GetAttribute(DocX.w + "ilvl") == iLevel.ToString());
+            level.Descendants().First(el => el.Name.LocalName == "start").SetAttributeValue(DocX.w + "val", start);
+        }
+
         private XElement GetAbstractNumXml(int abstractNumId, int numId, int? startNumber, bool continueNumbering)
         {
             //Fixing an issue where numbering would continue from previous numbered lists. Setting startOverride assures that a numbered list starts on the provided number.
@@ -160,13 +176,13 @@ namespace Novacode
             var startOverride = new XElement(XName.Get("startOverride", DocX.w.NamespaceName), new XAttribute(DocX.w + "val", startNumber ?? 1));
             var lvlOverride = new XElement(XName.Get("lvlOverride", DocX.w.NamespaceName), new XAttribute(DocX.w + "ilvl", 0), startOverride);
             var abstractNumIdElement = new XElement(XName.Get("abstractNumId", DocX.w.NamespaceName), new XAttribute(DocX.w + "val", abstractNumId));
-            return continueNumbering 
+            return continueNumbering
                 ? new XElement(XName.Get("num", DocX.w.NamespaceName), new XAttribute(DocX.w + "numId", numId), abstractNumIdElement)
                 : new XElement(XName.Get("num", DocX.w.NamespaceName), new XAttribute(DocX.w + "numId", numId), abstractNumIdElement, lvlOverride);
         }
 
         /// <summary>
-        /// Method to determine the last numId for a list element. 
+        /// Method to determine the last numId for a list element.
         /// Also useful for determining the next numId to use for inserting a new list element into the document.
         /// </summary>
         /// <returns>
@@ -207,18 +223,6 @@ namespace Novacode
                 return maxAbstractNumId;
             }
             return defaultValue;
-        }
-
-        /// <summary>
-        /// Get the abstractNum definition for the given numId
-        /// </summary>
-        /// <param name="numId">The numId on the pPr element</param>
-        /// <returns>XElement representing the requested abstractNum</returns>
-        internal XElement GetAbstractNum(int numId)
-        {
-            var num = Document.numbering.Descendants().First(d => d.Name.LocalName == "num" && d.GetAttribute(DocX.w + "numId").Equals(numId.ToString()));
-            var abstractNumId = num.Descendants().First(d => d.Name.LocalName == "abstractNumId");
-            return Document.numbering.Descendants().First(d => d.Name.LocalName == "abstractNum" && d.GetAttribute("abstractNumId").Equals(abstractNumId.Value));
         }
 
         private void ValidateDocXNumberingPartExists()

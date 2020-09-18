@@ -18,22 +18,22 @@ namespace Novacode
         public const string TEMPLATE_DOCUMENTTYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml";
         public const string MACRO_DOCUMENTTYPE = "application/vnd.ms-word.document.macroEnabled.main+xml";
 
-		/// <summary>
-		///  List of restricted character in xml: [#x1-#x8] | [#xB-#xC] | [#xE-#x1F] | [#x7F-#x84] | [#x86-#x9F]
-		///  See:  https://www.w3.org/TR/xml11/#sec-xml11
-		/// </summary>
-		public static readonly char[] RestrictedXmlChar = new char[] {
-			'\x1','\x2','\x3','\x4','\x5','\x6','\x7','\x8','\xb','\xc','\xe','\xf',
-			'\x10','\x11','\x12','\x13','\x14','\x15','\x16','\x17','\x18','\x19','\x1a','\x1b','\x1c','\x1e','\x1f',
-			'\x7f','\x80','\x81','\x82','\x83','\x84','\x86','\x87','\x88','\x89','\x8a','\x8b','\x8c','\x8d','\x8e','\x8f',
-			'\x90','\x91','\x92','\x93','\x94','\x95','\x96','\x97','\x98','\x99','\x9a','\x9b','\x9c','\x9d','\x9e','\x9f'
-		};
+        /// <summary>
+        ///  List of restricted character in xml: [#x1-#x8] | [#xB-#xC] | [#xE-#x1F] | [#x7F-#x84] | [#x86-#x9F]
+        ///  See:  https://www.w3.org/TR/xml11/#sec-xml11
+        /// </summary>
+        public static readonly char[] RestrictedXmlChar = new char[] {
+            '\x1','\x2','\x3','\x4','\x5','\x6','\x7','\x8','\xb','\xc','\xe','\xf',
+            '\x10','\x11','\x12','\x13','\x14','\x15','\x16','\x17','\x18','\x19','\x1a','\x1b','\x1c','\x1e','\x1f',
+            '\x7f','\x80','\x81','\x82','\x83','\x84','\x86','\x87','\x88','\x89','\x8a','\x8b','\x8c','\x8d','\x8e','\x8f',
+            '\x90','\x91','\x92','\x93','\x94','\x95','\x96','\x97','\x98','\x99','\x9a','\x9b','\x9c','\x9d','\x9e','\x9f'
+        };
 
-		public static bool IsNullOrWhiteSpace(this string value)
-            {
-                if (value == null) return true;
-                return string.IsNullOrEmpty(value.Trim());
-            }
+        public static bool IsNullOrWhiteSpace(this string value)
+        {
+            if (value == null) return true;
+            return string.IsNullOrEmpty(value.Trim());
+        }
 
         /// <summary>
         /// Checks whether 'toCheck' has all children that 'desired' has and values of 'val' attributes are the same
@@ -57,6 +57,7 @@ namespace Novacode
 
             return true;
         }
+
         internal static void CreateRelsPackagePart(DocX Document, Uri uri)
         {
             PackagePart pp = Document.package.CreatePart(uri, DocX.contentTypeApplicationRelationShipXml, CompressionOption.Maximum);
@@ -78,12 +79,15 @@ namespace Novacode
             {
                 case "tab":
                     return 1;
+
                 case "br":
                     return 1;
+
                 case "t":
                     goto case "delText";
                 case "delText":
                     return Xml.Value.Length;
+
                 case "tr":
                     goto case "br";
                 case "tc":
@@ -178,8 +182,10 @@ namespace Novacode
             {
                 case "tab":
                     return "\t";
+
                 case "br":
                     return "\n";
+
                 case "t":
                     goto case "delText";
                 case "delText":
@@ -304,7 +310,7 @@ namespace Novacode
             PackagePart corePropertiesPart = document.package.CreatePart(new Uri("/docProps/core.xml", UriKind.Relative), "application/vnd.openxmlformats-package.core-properties+xml", CompressionOption.Maximum);
 
             XDocument corePropDoc = XDocument.Parse(@"<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
-<cp:coreProperties xmlns:cp='http://schemas.openxmlformats.org/package/2006/metadata/core-properties' xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:dcterms='http://purl.org/dc/terms/' xmlns:dcmitype='http://purl.org/dc/dcmitype/' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'> 
+<cp:coreProperties xmlns:cp='http://schemas.openxmlformats.org/package/2006/metadata/core-properties' xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:dcterms='http://purl.org/dc/terms/' xmlns:dcmitype='http://purl.org/dc/dcmitype/' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
    <dc:title></dc:title>
    <dc:subject></dc:subject>
    <dc:creator></dc:creator>
@@ -312,7 +318,7 @@ namespace Novacode
    <dc:description></dc:description>
    <cp:lastModifiedBy></cp:lastModifiedBy>
    <cp:revision>1</cp:revision>
-   <dcterms:created xsi:type='dcterms:W3CDTF'>"+ DateTime.UtcNow.ToString("s") + "Z" + @"</dcterms:created>
+   <dcterms:created xsi:type='dcterms:W3CDTF'>" + DateTime.UtcNow.ToString("s") + "Z" + @"</dcterms:created>
    <dcterms:modified xsi:type='dcterms:W3CDTF'>" + DateTime.UtcNow.ToString("s") + "Z" + @"</dcterms:modified>
 </cp:coreProperties>");
 
@@ -367,9 +373,8 @@ namespace Novacode
             return document;
         }
 
-
         /// <summary>
-        /// If this document does not contain a /word/numbering.xml add the default one generated by Microsoft Word 
+        /// If this document does not contain a /word/numbering.xml add the default one generated by Microsoft Word
         /// when the default bullet, numbered and multilevel lists are added to a blank document
         /// </summary>
         /// <param name="package"></param>
@@ -380,7 +385,7 @@ namespace Novacode
             // Create the main document part for this package
             PackagePart wordNumbering = package.CreatePart(new Uri("/word/numbering.xml", UriKind.Relative), "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml", CompressionOption.Maximum);
 
-            numberingDoc = DecompressXMLResource("Novacode.Resources.numbering.xml.gz");
+            numberingDoc = DecompressXMLResource("DocX.Resources.numbering.xml.gz");
 
             // Save /word/numbering.xml
             using (TextWriter tw = new StreamWriter(new PackagePartStream(wordNumbering.GetStream(FileMode.Create, FileAccess.Write))))
@@ -391,8 +396,6 @@ namespace Novacode
             mainDocumentPart.CreateRelationship(wordNumbering.Uri, TargetMode.Internal, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering");
             return numberingDoc;
         }
-
-
 
         /// <summary>
         /// If this document does not contain a /word/styles.xml add the default one generated by Microsoft Word.
@@ -405,7 +408,7 @@ namespace Novacode
             // Create the main document part for this package
             PackagePart word_styles = package.CreatePart(new Uri("/word/styles.xml", UriKind.Relative), "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml", CompressionOption.Maximum);
 
-            stylesDoc = HelperFunctions.DecompressXMLResource("Novacode.Resources.default_styles.xml.gz");
+            stylesDoc = HelperFunctions.DecompressXMLResource("DocX.Resources.default_styles.xml.gz");
             XElement lang = stylesDoc.Root.Element(XName.Get("docDefaults", DocX.w.NamespaceName)).Element(XName.Get("rPrDefault", DocX.w.NamespaceName)).Element(XName.Get("rPr", DocX.w.NamespaceName)).Element(XName.Get("lang", DocX.w.NamespaceName));
             lang.SetAttributeValue(XName.Get("val", DocX.w.NamespaceName), CultureInfo.CurrentCulture);
 
@@ -450,16 +453,16 @@ namespace Novacode
         }
 
         internal static XElement CreateTable(int rowCount, int columnCount)
-		{
-			int[] columnWidths = new int[columnCount];
-			for (int i = 0; i < columnCount; i++)
-			{
-				columnWidths[i] = 2310;
-			}
-			return CreateTable(rowCount, columnWidths);
-		}
+        {
+            int[] columnWidths = new int[columnCount];
+            for (int i = 0; i < columnCount; i++)
+            {
+                columnWidths[i] = 2310;
+            }
+            return CreateTable(rowCount, columnWidths);
+        }
 
-		internal static XElement CreateTable(int rowCount, int[] columnWidths)
+        internal static XElement CreateTable(int rowCount, int[] columnWidths)
         {
             XElement newTable =
             new XElement
@@ -496,8 +499,8 @@ namespace Novacode
         }
 
         /// <summary>
-        /// Create and return a cell of a table        
-        /// </summary>        
+        /// Create and return a cell of a table
+        /// </summary>
         internal static XElement CreateTableCell(double w = 2310)
         {
             return new XElement
@@ -585,7 +588,7 @@ namespace Novacode
             {
                 return newRuns; //I dont wanna get an exception if text == null, so just return empy list
             }
-            
+
             char lastChar = '\0';
 
             foreach (char c in text)
@@ -602,8 +605,9 @@ namespace Novacode
                         }
                         newRuns.Add(new XElement(DocX.w + "r", rPr, tabRun));
                         break;
+
                     case '\r':
-                    	if (sb.Length > 0)
+                        if (sb.Length > 0)
                         {
                             XElement t = new XElement(DocX.w + "t", sb.ToString());
                             Novacode.Text.PreserveSpace(t);
@@ -612,9 +616,10 @@ namespace Novacode
                         }
                         newRuns.Add(new XElement(DocX.w + "r", rPr, breakRun));
                         break;
+
                     case '\n':
-                    	if (lastChar == '\r') break;
-                    	
+                        if (lastChar == '\r') break;
+
                         if (sb.Length > 0)
                         {
                             XElement t = new XElement(DocX.w + "t", sb.ToString());
@@ -626,18 +631,18 @@ namespace Novacode
                         break;
 
                     default:
-						// Check the character against restricted list:
-						// RestrictedChar	   ::=   	[#x1-#x8] | [#xB-#xC] | [#xE-#x1F] | [#x7F-#x84] | [#x86-#x9F]
-						// See https://www.w3.org/TR/xml11/#sec-xml11 
-						if( RestrictedXmlChar.Contains( c ) )
-						{
-							// skip the character
-						}
-						else
-							sb.Append(c);
+                        // Check the character against restricted list:
+                        // RestrictedChar	   ::=   	[#x1-#x8] | [#xB-#xC] | [#xE-#x1F] | [#x7F-#x84] | [#x86-#x9F]
+                        // See https://www.w3.org/TR/xml11/#sec-xml11
+                        if (RestrictedXmlChar.Contains(c))
+                        {
+                            // skip the character
+                        }
+                        else
+                            sb.Append(c);
                         break;
                 }
-                
+
                 lastChar = c;
             }
 
@@ -689,8 +694,8 @@ namespace Novacode
             return new XElement[] { before, after };
         }
 
-        /// <!-- 
-        /// Bug found and fixed by trnilse. To see the change, 
+        /// <!--
+        /// Bug found and fixed by trnilse. To see the change,
         /// please compare this release to the previous release using TFS compare.
         /// -->
         internal static bool IsSameFile(Stream streamOne, Stream streamTwo)
@@ -714,8 +719,8 @@ namespace Novacode
             }
             while ((file1byte == file2byte) && (file1byte != -1));
 
-            // Return the success of the comparison. "file1byte" is 
-            // equal to "file2byte" at this point only if the files are 
+            // Return the success of the comparison. "file1byte" is
+            // equal to "file2byte" at this point only if the files are
             // the same.
 
             streamOne.Position = 0;
@@ -724,50 +729,64 @@ namespace Novacode
             return ((file1byte - file2byte) == 0);
         }
 
-      internal static UnderlineStyle GetUnderlineStyle(string underlineStyle)
-      {
-        switch (underlineStyle)
+        internal static UnderlineStyle GetUnderlineStyle(string underlineStyle)
         {
-          case "single":
-            return UnderlineStyle.singleLine;
-          case "double": 
-            return UnderlineStyle.doubleLine;
-          case "thick":
-            return UnderlineStyle.thick;
-          case "dotted":
-            return UnderlineStyle.dotted;
-          case "dottedHeavy":
-            return UnderlineStyle.dottedHeavy;
-          case "dash":
-            return UnderlineStyle.dash;
-          case "dashedHeavy":
-            return UnderlineStyle.dashedHeavy;
-          case "dashLong":
-            return UnderlineStyle.dashLong;
-          case "dashLongHeavy":
-            return UnderlineStyle.dashLongHeavy;
-          case "dotDash":
-            return UnderlineStyle.dotDash;
-          case "dashDotHeavy":
-            return UnderlineStyle.dashDotHeavy;
-          case "dotDotDash":
-            return UnderlineStyle.dotDotDash;
-          case "dashDotDotHeavy":
-            return UnderlineStyle.dashDotDotHeavy;
-          case "wave":
-            return UnderlineStyle.wave;
-          case "wavyHeavy":
-            return UnderlineStyle.wavyHeavy;
-          case "wavyDouble":
-            return UnderlineStyle.wavyDouble;
-          case "words":
-            return UnderlineStyle.words;
-          default: 
-            return UnderlineStyle.none;
+            switch (underlineStyle)
+            {
+                case "single":
+                    return UnderlineStyle.singleLine;
+
+                case "double":
+                    return UnderlineStyle.doubleLine;
+
+                case "thick":
+                    return UnderlineStyle.thick;
+
+                case "dotted":
+                    return UnderlineStyle.dotted;
+
+                case "dottedHeavy":
+                    return UnderlineStyle.dottedHeavy;
+
+                case "dash":
+                    return UnderlineStyle.dash;
+
+                case "dashedHeavy":
+                    return UnderlineStyle.dashedHeavy;
+
+                case "dashLong":
+                    return UnderlineStyle.dashLong;
+
+                case "dashLongHeavy":
+                    return UnderlineStyle.dashLongHeavy;
+
+                case "dotDash":
+                    return UnderlineStyle.dotDash;
+
+                case "dashDotHeavy":
+                    return UnderlineStyle.dashDotHeavy;
+
+                case "dotDotDash":
+                    return UnderlineStyle.dotDotDash;
+
+                case "dashDotDotHeavy":
+                    return UnderlineStyle.dashDotDotHeavy;
+
+                case "wave":
+                    return UnderlineStyle.wave;
+
+                case "wavyHeavy":
+                    return UnderlineStyle.wavyHeavy;
+
+                case "wavyDouble":
+                    return UnderlineStyle.wavyDouble;
+
+                case "words":
+                    return UnderlineStyle.words;
+
+                default:
+                    return UnderlineStyle.none;
+            }
         }
-      }
-
-
-
     }
 }
