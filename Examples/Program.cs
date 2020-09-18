@@ -475,9 +475,7 @@ namespace Examples
                 newRow.ReplaceText("4", "5");
 
                 // Add an image into the document.    
-                RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-                rd.Up(2);
-                Image image = document.AddImage(rd.Path + @"\images\logo_template.png");
+                Image image = document.AddImage(@"images\logo_template.png");
 
                 // Create a picture (A custom view of an Image).
                 Picture picture = image.CreatePicture();
@@ -555,9 +553,7 @@ namespace Examples
                 newRow.ReplaceText("4", "5");
 
                 // Add an image into the document.    
-                RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-                rd.Up(2);
-                Image image = document.AddImage(rd.Path + @"\images\logo_template.png");
+                Image image = document.AddImage(@"images\logo_template.png");
 
                 // Create a picture (A custom view of an Image).
                 Picture picture = image.CreatePicture();
@@ -838,9 +834,7 @@ namespace Examples
             using (DocX document = DocX.Create(@"docs\HeadersAndFootersWithImagesAndTables.docx"))
             {
                 // Add a template logo image to this document.
-                RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-                rd.Up(2);
-                Image logo = document.AddImage(rd.Path + @"\images\logo_the_happy_builder.png");
+                Image logo = document.AddImage(@"images\logo_the_happy_builder.png");
 
                 // Add Headers and Footers to this document.
                 document.AddHeaders();
@@ -1005,9 +999,7 @@ namespace Examples
             using (DocX document = DocX.Create(@"docs\HeadersAndFootersWithImagesAndTablesUsingInsertPicture.docx"))
             {
                 // Add a template logo image to this document.
-                RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-                rd.Up(2);
-                Image logo = document.AddImage(rd.Path + @"\images\logo_the_happy_builder.png");
+                Image logo = document.AddImage(@"images\logo_the_happy_builder.png");
 
                 // Add Headers and Footers to this document.
                 document.AddHeaders();
@@ -1240,9 +1232,7 @@ namespace Examples
             logo_paragraph.Pictures[0].Remove();
 
             // Add the Happy Builders logo to this document.
-            RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-            rd.Up(2);
-            Image logo = template.AddImage(rd.Path + @"\images\logo_the_happy_builder.png");
+            Image logo = template.AddImage(@"images\logo_the_happy_builder.png");
 
             // Insert the Happy Builders logo into this Paragraph.
             logo_paragraph.InsertPicture(logo.CreatePicture());
@@ -1334,9 +1324,7 @@ namespace Examples
             Paragraph upper_right_paragraph = layout_table.Rows[0].Cells[1].Paragraphs[0];
 
             // Add a template logo image to this document.
-            RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-            rd.Up(2);
-            Image logo = document.AddImage(rd.Path + @"\images\logo_template.png");
+            Image logo = document.AddImage(@"images\logo_template.png");
 
             // Insert this template logo into the upper right Paragraph.
             upper_right_paragraph.InsertPicture(logo.CreatePicture());
@@ -1975,9 +1963,7 @@ namespace Examples
             using (DocX document = DocX.Create(@"docs\HelloWorldAddPictureToWord.docx"))
             {
                 // Add an image into the document.    
-                RelativeDirectory rd = new RelativeDirectory(); // prepares the files for testing
-                rd.Up(2);
-                Image image = document.AddImage(rd.Path + @"\images\logo_template.png");
+                Image image = document.AddImage(@"images\logo_template.png");
 
                 // Create a picture (A custom view of an Image).
                 Picture picture = image.CreatePicture();

@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -17,5 +18,13 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DocX\DocX.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="images\logo_template.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="images\logo_the_happy_builder.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
