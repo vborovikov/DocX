@@ -91,7 +91,7 @@ namespace UnitTests
 
 				// Check file size
 				FileInfo f = new FileInfo( temporaryFilePath );
-				Assert.IsTrue( f.Length == 9658 );
+				Assert.AreEqual(9659, f.Length);
 			}
 
 			// Delete the tempory file.
